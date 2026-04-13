@@ -1,20 +1,23 @@
 import API from "./API";
 
 class ReservationAPI {
-  getReservations() {
-    return API().get("/reservations");
+  getReservations(params = {}) {
+    return API().get("/reservations", { params });
   }
-  registerReservation(reservationData) {
+  createReservation(reservationData) {
     return API().post("/reservations", reservationData);
   }
-  editReservation(id, reservationData) {
+  updateReservation(id, reservationData) {
     return API().patch("/reservations/" + id, reservationData);
   }
   cancelReservation(id) {
-    return API().delete("/reservations/" + id);
+    return API().post(`/reservations/${id}/cancel`);
   }
-  chooseTable(id, tableId) {
-    return API().post("/reservations/choose-table/" + id, tableId);
+  updateReservationStatus(id, status) {
+    return API().post(`/reservations/${id}/status`, { status });
+  }
+  checkAvailability(payload) {
+    return API().post("/availability/check", payload);
   }
 }
 

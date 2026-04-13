@@ -1,97 +1,335 @@
-<h1 align="center">
-<img src="https://github.com/slavyanHristov/restaurant-table-reservation-system/blob/feature/readme/screenshots/rtrs.png" width="300" />
-<br>
-Restaurant Table Reservation System - RTRS
-<br>
-</h1>
+# Kaya Reservation System
 
-<h4 align="center">Table reservation web app which could be applied in any restaurant</h4>
+Kaya Reservation System is a production-minded restaurant reservation platform built on the existing Vue + Express + Sequelize + MySQL repo. It is now the single source of truth for:
 
-<p align="center">
-  <a href="#key-features">Key Features</a> •
-  <a href="#how-to-use">How To Use</a> •
-  <a href="#credits">Credits</a> •
-  <a href="#extra">Extra</a> •
-  <a href="#ideas-for-future-development">Ideas For Future Development</a> •
-  <a href="#contact">Contact</a>
-</p>
+- customers identified by normalized phone number
+- tables and seating areas
+- reservations and status lifecycle
+- weekly opening hours
+- blocked slots / closures
+- staff-facing reservation operations
+- Retell-ready reservation APIs
 
-## Key Features
+## Stack
 
-* Responsive UI
-* Single Page Application (faster loading experience)
-* Create new reservations
-* Search for registered reservations in the system
-* Register new restaurant tables by specifying name and table capacity
-* View all reservations by chosen date
-* Edit reservation details. ex. => Reservation Time, Reservation Date, Number of People
-* Cancel a reservation
-* Seat guests by accessing their registered reservation in the system and choosing free restaurant table
-* Free a table when given reservation is complete.
+- Frontend: Vue 3 + Vite
+- Backend: Node.js + Express
+- Database: MySQL with Sequelize
+- Tests: Jest + Supertest on backend, Vitest on frontend
 
-## How To Use
+## Kaya features
 
-To clone and run this application, you'll need [Git](https://git-scm.com), [Node.js](https://nodejs.org/en/download/), [MySQL](https://dev.mysql.com/downloads/mysql/) (needed since the application and the database aren't hosted currently)
+- Customer memory keyed by E.164-style phone numbers
+- Seating areas: `indoor`, `indoor_rooftop`, `outdoor_rooftop`
+- Weekly opening hours model plus date-specific closures
+- Availability engine with:
+  - smallest suitable table selection
+  - overlap prevention
+  - inactive table filtering
+  - closure-aware checks
+  - nearby alternative time suggestions
+  - alternative area suggestions
+- Reservation lifecycle statuses:
+  - `confirmed`
+  - `cancelled`
+  - `completed`
+  - `no_show`
+- Retell-facing endpoints for lookup, availability, create, modify, and cancel
+- Staff dashboard for reservations, customers, tables, closures, and hours
+
+## Setup
+
+### 1. Install dependencies
+
+Run installs in all three package locations:
 
 ```bash
-# Clone this repository
-$ git clone https://github.com/slavyanHristov/restaurant-table-reservation-system.git 
+cd restaurant-table-reservation-system
+npm install
 
-# Go into the repository
-$ cd restaurant-table-reservation-system
+cd back-end
+npm install
 
-# Install dependencies
-$ npm install
-
-# Create environment variables file
-$ touch .\back-end\.env
-
-# Add environment variables to the file
-$ echo "DB_USERNAME=<your_db_username> DB_PASSWORD=<your_db_password> DB_NAME=rtrs_db DB_HOST=localhost DB_DIALECT=mysql DB_PORT=3306 PORT=5000" >> .\back-end\.env
-
-# Run the app in production mode
-$ npm run start:prod
-
-# Run the app in development mode (nodemon dependency needed)
-$ npm run start:dev
+cd ../front-end
+npm install
 ```
 
-## Credits
+### 2. Configure environment variables
 
-This software uses the following open source packages:
+Copy [`back-end/.env.example`](/Users/basimhussain/Downloads/kaya reservation system/restaurant-table-reservation-system/back-end/.env.example:1) to `back-end/.env` and adjust values for your environment.
 
-- [Node.js](https://nodejs.org/)
-- [Vue.js](https://vuejs.org/)
-- [Express.js](https://expressjs.com/)
-- [Sequelize](https://sequelize.org/)
+Important settings:
 
-The UI/UX Design is built by the help of [Figma](https://figma.com/)
+- `RESTAURANT_TIMEZONE`: defaults to `Asia/Karachi`
+- `DEFAULT_RESERVATION_DURATION_MINUTES`: defaults to `120`
+- `ALTERNATIVE_SLOT_STEP_MINUTES`: defaults to `30`
+- `DEFAULT_PHONE_COUNTRY`: defaults to `92`
+- `SEATING_AREAS`: defaults to `indoor,indoor_rooftop,outdoor_rooftop`
+- `RECEPTION_NUMBER`: optional, returned by lookup-customer for Retell variable injection
 
-## Extra
-The UI/UX Design can be found here:
-* [RTRS-FIGMA-PROJECT](https://www.figma.com/file/Rpx13QhhGTYX2fAHnXs4XR/restaurant-reservation-ui%2Fux-v1.0?node-id=2%3A35)
+### 3. Create the database
 
-Readme files introducing the developed project:
-* [Front-end README](https://github.com/slavyanHristov/restaurant-table-reservation-system/blob/feature/readme/front-end/README.md)
-* [Back-end README](https://github.com/slavyanHristov/restaurant-table-reservation-system/blob/feature/readme/back-end/README.md)
-  
-YouTube video diplaying the end-product of the project: 
-* [Link](https://www.youtube.com/watch?v=E2CjHID9dfs)
+Create the MySQL databases referenced by `DB_NAME` and `DB_NAME_TEST`.
 
-## Ideas For Future Development
+### 4. Reset migrations
 
-- Integration of payment systems. (Customers shouldn't reserve restaurant tables for free)
-- Make the system more large-scale. For example, make it handle multiple restaurants.
-- Implement mailing service which notifies customers for details about their reservation.
-- Development of unit, integration and end-to-end tests.
-- Restaurant should have schedule. On some days of the week the restaurant could be closed or opened earlier or later. Or on the other hand it won't work at all. In such cases there should be validations which prevent from making reservations.
+This Kaya refactor assumes a fresh schema reset.
 
-## Contact
- > **Note**
- > If any issues are encountered or you want to collaborate with me on developing further the project please contact me at:
+```bash
+cd back-end
+npm run migrate:reset
+```
 
- ---
+### 5. Optional sample seed
 
- > GitHub [@slavyanHristov](https://github.com/slavyanHristov) &nbsp;&middot;&nbsp;
- > Gmail slavqnhristov@gmail.com &nbsp;&middot;&nbsp;
- > ABV slavqn99@abv.bg (for bulgarian audience)
+Seed a starter Kaya table inventory:
+
+```bash
+cd back-end
+npm run seed:all
+```
+
+The migrations already create default weekly opening hours for all 7 days. The sample seeder adds starter tables across the three Kaya seating areas.
+
+### 6. Run the app
+
+From the project root:
+
+```bash
+npm run start:dev
+```
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:5000/api/v1`
+
+## Main admin routes
+
+- `/` dashboard
+- `/reservations`
+- `/customers`
+- `/tables`
+- `/closures`
+- `/settings`
+
+## Data model
+
+### Customer
+
+- `id`
+- `name`
+- `phone_e164` unique
+- `preferred_language`
+- `notes`
+- `vip_flag`
+- `last_visit_at`
+- timestamps
+
+### Table
+
+- `id`
+- `table_name`
+- `area`
+- `capacity`
+- `is_active`
+- `notes`
+- timestamps
+
+### Reservation
+
+- `id`
+- `customer_id`
+- `reservation_date`
+- `start_time`
+- `end_time`
+- `guest_count`
+- `table_id`
+- `seating_area`
+- `status`
+- `source`
+- `special_request`
+- `idempotency_key`
+- timestamps
+
+### Closure
+
+- `id`
+- `date`
+- `start_time`
+- `end_time`
+- `area` nullable
+- `table_id` nullable
+- `reason`
+- timestamps
+
+### Operating hour
+
+- `day_of_week`
+- `open_time`
+- `close_time`
+- `is_closed`
+
+## Availability logic
+
+The availability engine lives in the backend service layer and is not buried inside route handlers.
+
+Availability evaluation order:
+
+1. Validate the request.
+2. Normalize date/time input.
+3. Apply default duration if one is not provided.
+4. Check the weekly operating hours for the requested weekday.
+5. Reject requests outside opening hours.
+6. Load active tables that can fit the party size.
+7. Exclude tables blocked by overlapping confirmed reservations.
+8. Exclude tables blocked by whole-restaurant, area-level, or table-level closures.
+9. Pick the smallest suitable remaining table.
+10. If unavailable, return alternative areas and nearby time slots.
+
+Concurrency protections:
+
+- idempotency key reuse returns the original reservation
+- fallback duplicate guard treats `same customer + same date + same start time + same guest_count + confirmed status` as the same booking regardless of source
+- create/modify paths run availability inside a DB transaction and lock candidate table rows before writing
+
+## Retell-ready endpoints
+
+Base path: `/api/retell`
+
+### `POST /lookup-customer`
+
+Request:
+
+```json
+{
+  "phone_number": "03001234567"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "customer_id": 12,
+  "customer_name": "Ayesha Khan",
+  "is_returning_customer": true,
+  "preferred_language": "en",
+  "last_seating_area": "indoor_rooftop",
+  "last_party_size": 4,
+  "last_visit_summary": "Booked indoor_rooftop for 4 guests on the last completed visit.",
+  "reception_number": "+922112345678"
+}
+```
+
+### `POST /check-availability`
+
+Request:
+
+```json
+{
+  "reservation_date": "2026-04-20",
+  "reservation_time": "19:30",
+  "guest_count": 4,
+  "seating_preference": "indoor_rooftop"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "available": true,
+  "matched_area": "indoor_rooftop",
+  "matched_table_id": 7,
+  "alternative_slots": [],
+  "alternative_areas": [],
+  "explanation": "A suitable Kaya table is available."
+}
+```
+
+### `POST /create-reservation`
+
+Request:
+
+```json
+{
+  "customer_name": "Ayesha Khan",
+  "phone_number": "03001234567",
+  "reservation_date": "2026-04-20",
+  "reservation_time": "19:30",
+  "guest_count": 4,
+  "seating_preference": "indoor_rooftop",
+  "special_request": "Window seat if possible",
+  "source": "phone_agent",
+  "idempotency_key": "retell-call-42"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "reservation_id": 34,
+  "confirmation_summary": "Reservation created for Ayesha Khan on 2026-04-20 at 19:30:00.",
+  "assigned_table": "IR2",
+  "assigned_area": "indoor_rooftop"
+}
+```
+
+### `POST /modify-reservation`
+
+Modify the existing reservation by `reservation_id` and the updated booking fields.
+
+### `POST /cancel-reservation`
+
+Request:
+
+```json
+{
+  "reservation_id": 34
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "reservation_id": 34,
+  "status": "cancelled",
+  "confirmation_summary": "Reservation 34 has been cancelled."
+}
+```
+
+## Testing
+
+Backend:
+
+```bash
+cd back-end
+npm test
+```
+
+Frontend:
+
+```bash
+cd front-end
+npm run test:unit
+npm run build
+```
+
+Current automated coverage includes:
+
+- customer lookup by normalized phone
+- duplicate-customer prevention
+- overlapping reservation blocking
+- closure-aware availability
+- smallest suitable table selection
+- successful reservation creation
+- idempotency key reuse
+- fallback duplicate submission guard
+- cancellation freeing availability
+- returning-customer summary behavior
+- Retell response shape checks

@@ -1,102 +1,143 @@
 <script setup>
-import ButtonFilled from "@/components/ButtonFilled.vue";
-import ButtonOutlined from "@/components/ButtonOutlined.vue";
+import { computed, onMounted, ref } from "vue";
+import SectionCard from "@/components/SectionCard.vue";
+import StatusPill from "@/components/StatusPill.vue";
+import reservationAPI from "@/services/reservationAPI";
+import settingsAPI from "@/services/settingsAPI";
+import { todayDate } from "@/utils/formatters";
+import { getApiErrorMessage } from "@/utils/http";
 
-import { useRouter } from "vue-router";
+const reservations = ref([]);
+const settings = ref(null);
+const error = ref("");
 
-const router = useRouter();
+const metrics = computed(() => {
+  const collection = reservations.value;
+  return {
+    total: collection.length,
+    confirmed: collection.filter((item) => item.status === "confirmed").length,
+    completed: collection.filter((item) => item.status === "completed").length,
+    noShow: collection.filter((item) => item.status === "no_show").length,
+  };
+});
 
-const changeRoute = (routeName) => router.push({ name: routeName });
+const loadDashboard = async () => {
+  error.value = "";
+  try {
+    const [settingsResponse, reservationsResponse] = await Promise.all([
+      settingsAPI.getSettings(),
+      reservationAPI.getReservations({ date: todayDate() }),
+    ]);
+    settings.value = settingsResponse.data.item;
+    reservations.value = reservationsResponse.data.collection;
+  } catch (err) {
+    error.value = getApiErrorMessage(
+      err,
+      "Unable to load the Kaya dashboard right now."
+    );
+  }
+};
+
+onMounted(loadDashboard);
 </script>
 
 <template>
-  <div class="main-wrapper">
-    <div class="left-section">
-      <div class="heading">
-        <h1>Straight to the point restaurant booking system</h1>
+  <div class="page-shell">
+    <div class="page-header">
+      <h1>Kaya Staff Dashboard</h1>
+      <p>
+        Today’s floor overview, reservation volume, and operating context for
+        the Kaya team.
+      </p>
+    </div>
+
+    <div v-if="error" class="feedback error">{{ error }}</div>
+
+    <div class="metric-grid">
+      <div class="metric-card">
+        <strong>{{ metrics.total }}</strong>
+        <span>Reservations today</span>
       </div>
-      <div class="buttons">
-        <ButtonFilled
-          text="New Reservation"
-          @click="changeRoute('new-reservation')"
-        />
-        <ButtonOutlined text="Search" @click="changeRoute('search')" />
+      <div class="metric-card">
+        <strong>{{ metrics.confirmed }}</strong>
+        <span>Confirmed</span>
+      </div>
+      <div class="metric-card">
+        <strong>{{ metrics.completed }}</strong>
+        <span>Completed</span>
+      </div>
+      <div class="metric-card">
+        <strong>{{ metrics.noShow }}</strong>
+        <span>No show</span>
       </div>
     </div>
-    <div class="right-section">
-      <img src="@/assets/images/hero-section-img.png" alt="food" />
+
+    <div class="page-grid two-column" style="margin-top: 1.5rem">
+      <SectionCard>
+        <template #header>
+          <div>
+            <h2>Today’s reservations</h2>
+            <p class="muted">Operational list for {{ todayDate() }}.</p>
+          </div>
+        </template>
+
+        <div v-if="reservations.length === 0" class="empty-state">
+          No reservations are scheduled for today yet.
+        </div>
+
+        <table v-else class="data-table">
+          <thead>
+            <tr>
+              <th>Guest</th>
+              <th>Time</th>
+              <th>Guests</th>
+              <th>Area</th>
+              <th>Table</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in reservations" :key="item.id">
+              <td>{{ item.customer?.name }}</td>
+              <td>{{ item.start_time }}</td>
+              <td>{{ item.guest_count }}</td>
+              <td>{{ item.seating_area || "Unassigned" }}</td>
+              <td>{{ item.table?.table_name || "Pending" }}</td>
+              <td><StatusPill :status="item.status" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <SectionCard>
+        <template #header>
+          <div>
+            <h2>Operational settings</h2>
+            <p class="muted">Backend-driven defaults exposed to staff.</p>
+          </div>
+        </template>
+
+        <div v-if="settings" class="stack-list">
+          <div class="list-card">
+            <strong>Timezone</strong>
+            <div class="muted">{{ settings.timezone }}</div>
+          </div>
+          <div class="list-card">
+            <strong>Default reservation duration</strong>
+            <div class="muted">
+              {{ settings.default_reservation_duration_minutes }} minutes
+            </div>
+          </div>
+          <div class="list-card">
+            <strong>Configured seating areas</strong>
+            <div class="muted">{{ settings.seating_areas.join(", ") }}</div>
+          </div>
+          <div class="list-card">
+            <strong>Reception number</strong>
+            <div class="muted">{{ settings.reception_number || "Not set" }}</div>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   </div>
 </template>
-
-<style scoped>
-.main-wrapper {
-  display: flex;
-  padding-left: var(--x-spacing-mobile);
-  padding-right: var(--x-spacing-mobile);
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 50px;
-}
-
-.left-section {
-  display: flex;
-  flex-direction: column;
-  gap: 50px;
-  margin-top: 50px;
-  margin-bottom: 50px;
-  justify-content: center;
-}
-
-.buttons {
-  display: flex;
-  justify-content: center;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.right-section {
-  padding-left: 5px;
-}
-
-img {
-  width: 600px;
-  height: 100%;
-  max-width: 100%;
-}
-
-h1 {
-  font-family: "Jost-Bold";
-  line-height: 40px;
-  text-transform: uppercase;
-  font-size: 30px;
-  text-align: center;
-}
-
-@media screen and (min-width: 1024px) {
-  .main-wrapper {
-    padding-left: var(--x-spacing-desktop);
-    padding-right: var(--x-spacing-desktop);
-  }
-  .left-section {
-    gap: 100px;
-    margin-top: 100px;
-    margin-bottom: 100px;
-  }
-  .buttons {
-    flex-direction: row;
-    gap: 30px;
-  }
-  .right-section {
-    padding-left: 100px;
-  }
-  img {
-    width: 900px;
-  }
-  h1 {
-    font-size: 56px;
-    line-height: 70px;
-  }
-}
-</style>

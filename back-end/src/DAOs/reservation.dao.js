@@ -1,120 +1,163 @@
 const db = require("../db/models");
-const { fn, col } = db.sequelize;
+const { Op } = db.Sequelize;
+
 const Reservation = db.reservation;
 const Customer = db.customer;
 const Table = db.table;
-const { flattenArrayObjects } = require("../utils/flattenObject");
 
-const findAllReservations = async () => {
-  const reservations = await Reservation.findAll({
-    attributes: ["id", "resDate", "resTime", "resStatus", "people"],
-    include: [
-      {
-        model: Customer,
-        attributes: [
-          [fn("CONCAT", col("firstName"), " ", col("lastName")), "name"],
-          "email",
-          "phone",
-        ],
-      },
+const reservationIncludes = [
+  {
+    model: Customer,
+    as: "customer",
+  },
+  {
+    model: Table,
+    as: "table",
+  },
+];
+
+const listReservations = async (filters = {}) => {
+  const where = {};
+
+  if (filters.date) {
+    where.reservationDate = filters.date;
+  }
+
+  if (filters.status) {
+    where.status = filters.status;
+  }
+
+  return Reservation.findAll({
+    where,
+    include: reservationIncludes,
+    order: [
+      ["reservationDate", "ASC"],
+      ["startTime", "ASC"],
     ],
   });
-  return flattenArrayObjects(reservations);
 };
 
-const findReservationById = async (reservationId) => {
-  const reservation = await Reservation.findOne({
+const findReservationById = async (reservationId, options = {}) => {
+  return Reservation.findByPk(reservationId, {
+    include: reservationIncludes,
+    ...options,
+  });
+};
+
+const createReservation = async (payload, options = {}) => {
+  return Reservation.create(payload, options);
+};
+
+const updateReservation = async (reservation, payload, options = {}) => {
+  return reservation.update(payload, options);
+};
+
+const findOverlappingConfirmedReservations = async ({
+  reservationDate,
+  startTime,
+  endTime,
+  tableIds,
+  excludeReservationId,
+  transaction,
+}) => {
+  const where = {
+    reservationDate,
+    status: "confirmed",
+    tableId: { [Op.in]: tableIds },
+    startTime: { [Op.lt]: endTime },
+    endTime: { [Op.gt]: startTime },
+  };
+
+  if (excludeReservationId) {
+    where.id = {
+      [Op.ne]: excludeReservationId,
+    };
+  }
+
+  return Reservation.findAll({
+    where,
+    transaction,
+  });
+};
+
+const findActiveDuplicateReservation = async ({
+  customerId,
+  reservationDate,
+  startTime,
+  guestCount,
+  excludeReservationId,
+  transaction,
+  lock,
+}) => {
+  const where = {
+    customerId,
+    reservationDate,
+    startTime,
+    guestCount,
+    status: "confirmed",
+  };
+
+  if (excludeReservationId) {
+    where.id = { [Op.ne]: excludeReservationId };
+  }
+
+  return Reservation.findOne({
+    where,
+    include: reservationIncludes,
+    transaction,
+    ...(lock ? { lock } : {}),
+  });
+};
+
+const findByIdempotencyKey = async (idempotencyKey, options = {}) => {
+  if (!idempotencyKey) return null;
+
+  return Reservation.findOne({
+    where: { idempotencyKey },
+    include: reservationIncludes,
+    ...options,
+  });
+};
+
+const listReservationsForCustomer = async (customerId) => {
+  return Reservation.findAll({
     where: {
-      id: reservationId,
+      customerId,
     },
+    include: reservationIncludes,
+    order: [
+      ["reservationDate", "DESC"],
+      ["startTime", "DESC"],
+    ],
   });
-
-  return reservation;
 };
 
-const createCustomer = async (customerDetails, t = null) => {
-  return await Customer.create(
-    {
-      firstName: customerDetails.firstName,
-      lastName: customerDetails.lastName,
-      phone: customerDetails.phone,
-      email: customerDetails.email,
-    },
-    {
-      transaction: t,
-    }
-  );
-};
-
-const createReservation = async (resDetails) => {
-  const { resDate, resTime, people, ...customerDetails } = resDetails;
-  const result = await db.sequelize.transaction(async (t) => {
-    const customer = await createCustomer(customerDetails, t);
-
-    const reservation = await Reservation.create(
-      {
-        resDate: resDate,
-        resTime: resTime,
-        people: people,
-        customerId: customer.id,
-      },
-      { transaction: t }
-    );
-
-    return reservation;
-  });
-  return result;
-};
-
-const updateReservation = async (reservationId, resDetails) => {
-  const [result, metadata] = await Reservation.update(resDetails, {
+const findLatestCompletedReservationForCustomer = async (
+  customerId,
+  options = {}
+) => {
+  return Reservation.findOne({
     where: {
-      id: reservationId,
+      customerId,
+      status: "completed",
     },
+    include: reservationIncludes,
+    order: [
+      ["reservationDate", "DESC"],
+      ["startTime", "DESC"],
+    ],
+    ...options,
   });
-
-  return result;
-};
-
-const deleteReservation = async (reservation) => {
-  return await reservation.destroy();
-};
-
-const setReservationStatus = async (reservation, status) => {
-  reservation.resStatus = status;
-  return await reservation.save();
-};
-
-const setReservationTable = async (reservationId, tableId) => {
-  await Table.update(
-    {
-      isOccupied: true,
-      reservationId: reservationId,
-    },
-    {
-      where: {
-        id: tableId,
-      },
-    }
-  );
-  return await Reservation.update(
-    {
-      resStatus: "seated",
-    },
-    {
-      where: {
-        id: reservationId,
-      },
-    }
-  );
 };
 
 module.exports = {
-  findAllReservations,
   createReservation,
-  updateReservation,
-  deleteReservation,
+  findActiveDuplicateReservation,
+  findByIdempotencyKey,
+  findLatestCompletedReservationForCustomer,
+  findOverlappingConfirmedReservations,
   findReservationById,
-  setReservationTable,
-  setReservationStatus,
+  listReservations,
+  listReservationsForCustomer,
+  updateReservation,
 };

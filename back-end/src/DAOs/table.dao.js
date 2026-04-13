@@ -1,50 +1,56 @@
 const db = require("../db/models");
-const Table = db.table;
-const Reservation = db.reservation;
+const { Op } = db.Sequelize;
 
-const findAllTables = async () => {
-  return await Table.findAll({
-    include: [
-      {
-        model: Reservation,
-      },
+const Table = db.table;
+
+const getAllTables = async () => {
+  return Table.findAll({
+    order: [
+      ["area", "ASC"],
+      ["capacity", "ASC"],
+      ["tableName", "ASC"],
     ],
   });
 };
 
-const createTable = async ({ name, capacity }) => {
-  return await Table.create({
-    name: name,
-    capacity: capacity,
-  });
+const findTableById = async (tableId, options = {}) => {
+  return Table.findByPk(tableId, options);
 };
 
-const findTableById = async (id) => {
-  return await Table.findOne({
-    where: {
-      id: id,
-    },
-  });
+const createTable = async (payload) => {
+  return Table.create(payload);
 };
 
 const updateTable = async (table, payload) => {
-  return await table.update(payload);
+  return table.update(payload);
 };
 
-const freeTable = async (reservationDAO, table) => {
-  const reservationId = table.reservationId;
-  const reservation = await reservationDAO.findReservationById(reservationId);
-  await updateTable(table, {
-    isOccupied: false,
-    reservationId: null,
+const findActiveCandidateTables = async ({
+  areas,
+  guestCount,
+  transaction,
+  lock,
+}) => {
+  return Table.findAll({
+    where: {
+      isActive: true,
+      capacity: { [Op.gte]: guestCount },
+      ...(areas?.length ? { area: { [Op.in]: areas } } : {}),
+    },
+    order: [
+      ["capacity", "ASC"],
+      ["tableName", "ASC"],
+      ["id", "ASC"],
+    ],
+    transaction,
+    ...(lock ? { lock } : {}),
   });
-
-  return await reservation.destroy();
 };
 
 module.exports = {
-  findAllTables,
   createTable,
+  findActiveCandidateTables,
   findTableById,
-  freeTable,
+  getAllTables,
+  updateTable,
 };

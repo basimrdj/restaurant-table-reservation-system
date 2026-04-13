@@ -1,14 +1,20 @@
-const entryHandler = (req, res) => {
-  return res
-    .status(200)
-    .send("Welcome to Restaurant Table Reservation System's API! 🎉");
+const appSettings = require("../config/appSettings");
+
+const entryHandler = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: `Welcome to the ${appSettings.restaurantName} Reservation System API.`,
+  });
 };
 
-const infoHandler = (req, res) => {
+const infoHandler = async (req, res) => {
   return res.status(200).json({
-    message:
-      "You can learn more about the API and the whole project in the github repo! 😀",
-    link: "https://github.com/slavyanHristov/restaurant-table-reservation-system",
+    success: true,
+    item: {
+      restaurant_name: appSettings.restaurantName,
+      description:
+        "Single source of truth for Kaya customers, reservations, tables, closures, hours, and Retell workflows.",
+    },
   });
 };
 

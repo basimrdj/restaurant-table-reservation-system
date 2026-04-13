@@ -1,6 +1,9 @@
 import axios from "axios";
 
-export default (url = "http://localhost:5000/api/v1") => {
+const defaultBaseUrl =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
+
+export default (url = defaultBaseUrl) => {
   return axios.create({
     baseURL: url,
   });

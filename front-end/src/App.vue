@@ -19,8 +19,11 @@ import TheFooter from "@/components/TheFooter.vue";
 
 <style scoped>
 main {
-  background-color: var(--light-pink);
+  background:
+    radial-gradient(circle at top, rgba(205, 161, 91, 0.18), transparent 26%),
+    var(--canvas);
   margin-top: var(--top-spacing);
+  min-height: calc(100vh - 85px);
 }
 .fade-enter-from,
 .fade-leave-to {

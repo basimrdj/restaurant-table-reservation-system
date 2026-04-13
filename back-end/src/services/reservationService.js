@@ -1,188 +1,318 @@
-const dateTimeValidator = require("../utils/dateAndTimeValidator");
+const db = require("../db/models");
+const reservationDAO = require("../DAOs/reservation.dao");
+const customerService = require("./customerService");
+const availabilityService = require("./availabilityService");
+const AppError = require("../utils/appError");
+const { serializeReservation } = require("../utils/serializers");
+const { assertEnum, assertRequiredFields } = require("../utils/validation");
 
-const getAllReservations = async (reservationDAO) => {
-  return await reservationDAO.findAllReservations();
+const ReservationModel = db.reservation;
+
+const getReservationResponse = async (reservationId, transaction) => {
+  const reservation = await reservationDAO.findReservationById(reservationId, {
+    transaction,
+  });
+  return serializeReservation(reservation);
 };
 
-const validateTime = (currDate, resDate, resTime) => {
-  if (resDate === dateTimeValidator.asDateString(currDate)) {
-    if (resTime < dateTimeValidator.asTimeString(currDate)) {
-      throw {
-        status: 400,
-        message: "ERROR: Given time is in the past!",
-      };
-    }
+const buildReservationWritePayload = (payload) => {
+  assertRequiredFields(payload, [
+    "customer_name",
+    "phone_number",
+    "reservation_date",
+    "reservation_time",
+    "guest_count",
+  ]);
+
+  if (payload.source) {
+    assertEnum(
+      payload.source,
+      ReservationModel.RESERVATION_SOURCES,
+      "source"
+    );
   }
-};
 
-const checkClosingOpeningTime = (resTime) => {
-  if (resTime > "23:00:59") {
-    throw {
-      status: 400,
-      message:
-        "Reservation must be made at least an hour before closing time (12:00 AM)",
-    };
-  } else if (resTime < "11:00:59") {
-    throw {
-      status: 400,
-      message: "You can't make reservation before opening time! (11:00 AM)",
-    };
-  }
-};
-
-const isFieldEmpty = (payload) => {
-  if (
-    !payload.firstName ||
-    !payload.lastName ||
-    !payload.phone ||
-    !payload.email ||
-    !payload.resDate ||
-    !payload.resTime ||
-    !payload.people
-  ) {
-    throw {
-      status: 400,
-      message: "Please fill in all fields!",
-    };
-  }
-};
-
-const registerReservation = async (reservationDAO, payload) => {
-  isFieldEmpty(payload);
-  validateTime(new Date(), payload.resDate, payload.resTime);
-  checkClosingOpeningTime(payload.resTime);
-  return await reservationDAO.createReservation(payload);
-};
-
-const editReservation = async (reservationId, reservationDAO, payload) => {
-  const reservation = await reservationDAO.findReservationById(reservationId);
-  if (!reservation)
-    throw {
-      status: 404,
-      message: "Reservation not found!",
-    };
-  validateTime(new Date(), payload.resDate, payload.resTime);
-  checkClosingOpeningTime(payload.resTime);
-  return await reservationDAO.updateReservation(reservationId, payload);
-};
-
-const cancelReservation = async (reservationId, reservationDAO) => {
-  const reservation = await reservationDAO.findReservationById(reservationId);
-  if (reservation) return await reservationDAO.deleteReservation(reservation);
-
-  throw {
-    status: 400,
-    message: "Given reservation doesn't exist!",
+  return {
+    customerName: payload.customer_name.trim(),
+    phoneNumber: payload.phone_number,
+    reservationDate: payload.reservation_date,
+    reservationTime: payload.reservation_time,
+    guestCount: payload.guest_count,
+    seatingPreference: payload.seating_preference || null,
+    specialRequest: payload.special_request || null,
+    source: payload.source || "manual",
+    idempotencyKey: payload.idempotency_key || null,
+    durationMinutes: payload.duration_minutes || null,
+    preferredLanguage: payload.preferred_language || null,
   };
 };
 
-const compareResDateToCurrDate = (resDate, currDate) => {
-  return resDate > currDate ? 1 : resDate < currDate ? -1 : 0;
+const ensureReservationIsMutable = (reservation) => {
+  if (!reservation) {
+    throw new AppError(404, "NOT_FOUND", "Reservation was not found.");
+  }
+
+  if (reservation.status !== "confirmed") {
+    throw new AppError(
+      409,
+      "INVALID_STATE",
+      "Only confirmed reservations can be modified."
+    );
+  }
 };
 
-const chooseTable = async (
-  reservationId,
-  tableId,
-  reservationDAO,
-  tableDAO
-) => {
-  let reservation = await reservationDAO.findReservationById(reservationId);
-  if (!reservation) {
-    throw {
-      status: 404,
-      message: "Reservation not found!",
-    };
-  }
-  const table = await tableDAO.findTableById(tableId);
+const createReservation = async (payload) => {
+  const writePayload = buildReservationWritePayload(payload);
 
-  const currDate = new Date();
-  const currDateStr = dateTimeValidator.asDateString(currDate);
+  return db.sequelize.transaction(async (transaction) => {
+    if (writePayload.idempotencyKey) {
+      const existingByKey = await reservationDAO.findByIdempotencyKey(
+        writePayload.idempotencyKey,
+        { transaction }
+      );
 
-  /**
-   * if the reservation day is in the future (compared to current date)
-   *  => throw error
-   */
-  if (compareResDateToCurrDate(reservation.resDate, currDateStr) === 1) {
-    throw {
-      status: 400,
-      message: "Booking a table is only available on the reservation date!",
-    };
-  }
+      if (existingByKey) {
+        return {
+          created: false,
+          reservation: serializeReservation(existingByKey),
+          availability: null,
+        };
+      }
+    }
 
-  /**
-   * if the reservation day is in the past (compared to current date)
-   *  => update the reservation's status to 'missed'
-   */
+    const customer = await customerService.getOrCreateCustomer({
+      customerName: writePayload.customerName,
+      phoneNumber: writePayload.phoneNumber,
+      preferredLanguage: writePayload.preferredLanguage,
+      transaction,
+    });
 
-  if (compareResDateToCurrDate(reservation.resDate, currDateStr) === -1) {
-    await reservationDAO.setReservationStatus(reservation, "missed");
-  }
+    const normalizedRequest = availabilityService.normalizeAvailabilityRequest({
+      reservation_date: writePayload.reservationDate,
+      reservation_time: writePayload.reservationTime,
+      guest_count: writePayload.guestCount,
+      seating_preference: writePayload.seatingPreference,
+      duration_minutes: writePayload.durationMinutes,
+    });
 
-  /**
-   * If the reservation day is equal to current day
-   *  and reservation time is the past (compared to current date - 30 minutes)
-   *  => update the reservation's status to missed
-   */
-  if (compareResDateToCurrDate(reservation.resDate, currDateStr) === 0) {
-    const currTimePlus30minsStr = dateTimeValidator.asTimeString(
-      new Date(currDate.setMinutes(currDate.getMinutes() - 2))
+    const duplicateReservation =
+      await reservationDAO.findActiveDuplicateReservation({
+        customerId: customer.id,
+        reservationDate: normalizedRequest.reservationDate,
+        startTime: normalizedRequest.startTime,
+        guestCount: normalizedRequest.guestCount,
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+    if (duplicateReservation) {
+      return {
+        created: false,
+        reservation: serializeReservation(duplicateReservation),
+        availability: null,
+      };
+    }
+
+    const availability = await availabilityService.checkAvailability(
+      {
+        reservation_date: normalizedRequest.reservationDate,
+        reservation_time: normalizedRequest.startTime,
+        guest_count: normalizedRequest.guestCount,
+        seating_preference: writePayload.seatingPreference,
+        duration_minutes: normalizedRequest.durationMinutes,
+      },
+      {
+        transaction,
+        lockTables: true,
+        skipAlternatives: true,
+      }
     );
-    if (currTimePlus30minsStr > reservation?.resTime) {
-      reservation = await reservationDAO.setReservationStatus(
-        reservation,
-        "missed"
+
+    if (!availability.available) {
+      throw new AppError(
+        409,
+        "UNAVAILABLE_SLOT",
+        availability.explanation,
+        {
+          alternative_slots: availability.alternative_slots,
+          alternative_areas: availability.alternative_areas,
+        }
       );
     }
-  }
-  /**
-   *
-   * if reservation.resStatus === 'seated'
-   *  => throw error => "You've already reserved a table. Please make a new reservation."
-   * if reservation.resStatus === 'missed'
-   *  => throw error => "You've missed your reservation date"
-   */
-  if (reservation.resStatus === "seated") {
-    throw {
-      status: 400,
-      message:
-        "You've already reserved a table! Please make a new reservation.",
-    };
-  } else if (reservation.resStatus === "missed") {
-    throw {
-      status: 400,
-      message:
-        "You've missed the reservation date and time! Please make a new reservation.",
-    };
-  }
-  /**
-   *
-   * If the given table is already occupied throw an error
-   */
-  if (table.isOccupied)
-    throw {
-      status: 400,
-      message: "Given table is already reserved!",
-    };
 
-  /**
-   *
-   * If the given reservation's party size is bigger than the table's capacity =>
-   *  throw Error
-   *  else => create the record
-   */
-  if (reservation.people > table.capacity)
-    throw {
-      status: 400,
-      message: "Reservation's party size is too big for this table!",
-    };
+    const createdReservation = await reservationDAO.createReservation(
+      {
+        customerId: customer.id,
+        tableId: availability.matched_table_id,
+        reservationDate: normalizedRequest.reservationDate,
+        startTime: normalizedRequest.startTime,
+        endTime: normalizedRequest.endTime,
+        guestCount: normalizedRequest.guestCount,
+        seatingArea: availability.matched_area,
+        status: "confirmed",
+        source: writePayload.source,
+        specialRequest: writePayload.specialRequest,
+        idempotencyKey: writePayload.idempotencyKey,
+      },
+      { transaction }
+    );
 
-  return await reservationDAO.setReservationTable(reservationId, tableId);
+    return {
+      created: true,
+      reservation: await getReservationResponse(createdReservation.id, transaction),
+      availability,
+    };
+  });
+};
+
+const listReservations = async (filters = {}) => {
+  const reservations = await reservationDAO.listReservations({
+    date: filters.date || null,
+    status: filters.status || null,
+  });
+
+  return reservations.map(serializeReservation);
+};
+
+const modifyReservation = async (reservationId, payload) => {
+  const existingReservation = await reservationDAO.findReservationById(reservationId);
+  ensureReservationIsMutable(existingReservation);
+
+  const writePayload = buildReservationWritePayload({
+    ...payload,
+    customer_name:
+      payload.customer_name || existingReservation.customer?.name || "",
+    phone_number:
+      payload.phone_number || existingReservation.customer?.phoneE164 || "",
+    reservation_date:
+      payload.reservation_date || existingReservation.reservationDate,
+    reservation_time: payload.reservation_time || existingReservation.startTime,
+    guest_count: payload.guest_count || existingReservation.guestCount,
+  });
+
+  return db.sequelize.transaction(async (transaction) => {
+    const lockedReservation = await reservationDAO.findReservationById(
+      reservationId,
+      { transaction, lock: transaction.LOCK.UPDATE }
+    );
+    ensureReservationIsMutable(lockedReservation);
+
+    const customer = await customerService.getOrCreateCustomer({
+      customerName: writePayload.customerName,
+      phoneNumber: writePayload.phoneNumber,
+      preferredLanguage: writePayload.preferredLanguage,
+      transaction,
+    });
+
+    const normalizedRequest = availabilityService.normalizeAvailabilityRequest({
+      reservation_date: writePayload.reservationDate,
+      reservation_time: writePayload.reservationTime,
+      guest_count: writePayload.guestCount,
+      seating_preference: writePayload.seatingPreference,
+      duration_minutes: writePayload.durationMinutes,
+    });
+
+    const duplicateReservation =
+      await reservationDAO.findActiveDuplicateReservation({
+        customerId: customer.id,
+        reservationDate: normalizedRequest.reservationDate,
+        startTime: normalizedRequest.startTime,
+        guestCount: normalizedRequest.guestCount,
+        excludeReservationId: reservationId,
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+    if (duplicateReservation) {
+      throw new AppError(
+        409,
+        "DUPLICATE_BOOKING",
+        "A matching confirmed reservation already exists for this customer."
+      );
+    }
+
+    const availability = await availabilityService.checkAvailability(
+      {
+        reservation_date: normalizedRequest.reservationDate,
+        reservation_time: normalizedRequest.startTime,
+        guest_count: normalizedRequest.guestCount,
+        seating_preference: writePayload.seatingPreference,
+        duration_minutes: normalizedRequest.durationMinutes,
+      },
+      {
+        excludeReservationId: reservationId,
+        transaction,
+        lockTables: true,
+        skipAlternatives: true,
+      }
+    );
+
+    if (!availability.available) {
+      throw new AppError(
+        409,
+        "UNAVAILABLE_SLOT",
+        availability.explanation,
+        {
+          alternative_slots: availability.alternative_slots,
+          alternative_areas: availability.alternative_areas,
+        }
+      );
+    }
+
+    await reservationDAO.updateReservation(
+      lockedReservation,
+      {
+        customerId: customer.id,
+        tableId: availability.matched_table_id,
+        reservationDate: normalizedRequest.reservationDate,
+        startTime: normalizedRequest.startTime,
+        endTime: normalizedRequest.endTime,
+        guestCount: normalizedRequest.guestCount,
+        seatingArea: availability.matched_area,
+        source: writePayload.source,
+        specialRequest: writePayload.specialRequest,
+      },
+      { transaction }
+    );
+
+    return getReservationResponse(reservationId, transaction);
+  });
+};
+
+const updateReservationStatus = async (reservationId, status) => {
+  assertEnum(status, ReservationModel.RESERVATION_STATUSES, "status");
+
+  return db.sequelize.transaction(async (transaction) => {
+    const reservation = await reservationDAO.findReservationById(reservationId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!reservation) {
+      throw new AppError(404, "NOT_FOUND", "Reservation was not found.");
+    }
+
+    await reservationDAO.updateReservation(
+      reservation,
+      {
+        status,
+      },
+      { transaction }
+    );
+
+    await customerService.syncCustomerLastVisit(reservation.customerId, transaction);
+    return getReservationResponse(reservationId, transaction);
+  });
+};
+
+const cancelReservation = async (reservationId) => {
+  return updateReservationStatus(reservationId, "cancelled");
 };
 
 module.exports = {
-  getAllReservations,
-  registerReservation,
-  editReservation,
   cancelReservation,
-  chooseTable,
+  createReservation,
+  listReservations,
+  modifyReservation,
+  updateReservationStatus,
 };

@@ -1,70 +1,66 @@
 "use strict";
 const { Model } = require("sequelize");
-const regularExpressions = require("../../utils/regularExpressions");
+
 module.exports = (sequelize, DataTypes) => {
   class Customer extends Model {
     static associate(models) {
       Customer.hasMany(models.reservation, {
-        foreignKey: {
-          allowNull: false,
-        },
-        onDelete: "cascade",
-        onUpdate: "cascade",
+        foreignKey: "customerId",
+        as: "reservations",
       });
     }
   }
+
   Customer.init(
     {
-      firstName: {
-        type: DataTypes.STRING(45),
+      name: {
+        type: DataTypes.STRING(120),
         allowNull: false,
         validate: {
-          is: {
-            args: regularExpressions.name.regex,
-            msg: regularExpressions.name.msg,
+          notEmpty: {
+            msg: "Customer name is required.",
           },
         },
       },
-      lastName: {
-        type: DataTypes.STRING(45),
+      phoneE164: {
+        type: DataTypes.STRING(20),
         allowNull: false,
+        unique: true,
         validate: {
+          notEmpty: {
+            msg: "Phone number is required.",
+          },
           is: {
-            args: regularExpressions.name.regex,
-            msg: regularExpressions.name.msg,
+            args: /^\+[1-9]\d{7,14}$/,
+            msg: "Phone number must be stored in E.164 format.",
           },
         },
       },
-      email: {
-        type: DataTypes.STRING(45),
-        allowNull: false,
-        validate: {
-          isEmail: {
-            msg: "Invalid email address!",
-          },
-        },
+      preferredLanguage: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
       },
-      phone: {
-        type: DataTypes.STRING(10),
+      notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      vipFlag: {
+        type: DataTypes.BOOLEAN,
         allowNull: false,
-        validate: {
-          is: {
-            args: regularExpressions.phone.regex,
-            msg: regularExpressions.phone.msg,
-          },
-        },
+        defaultValue: false,
+      },
+      lastVisitAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
       },
     },
     {
       sequelize,
       modelName: "customer",
-      indexes: [
-        {
-          unique: true,
-          fields: ["email"],
-        },
-      ],
+      tableName: "customers",
+      underscored: true,
     }
   );
+
   return Customer;
 };

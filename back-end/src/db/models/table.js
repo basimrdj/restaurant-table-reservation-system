@@ -1,73 +1,73 @@
 "use strict";
 const { Model } = require("sequelize");
+const appSettings = require("../../config/appSettings");
+
 module.exports = (sequelize, DataTypes) => {
   class Table extends Model {
     static associate(models) {
-      Table.belongsTo(models.reservation, {
-        onUpdate: "cascade",
-        hooks: true,
+      Table.hasMany(models.reservation, {
+        foreignKey: "tableId",
+        as: "reservations",
+      });
+      Table.hasMany(models.closure, {
+        foreignKey: "tableId",
+        as: "closures",
       });
     }
   }
+
   Table.init(
     {
-      name: {
-        type: DataTypes.STRING(45),
+      tableName: {
+        type: DataTypes.STRING(60),
+        allowNull: false,
+        unique: true,
+        validate: {
+          notEmpty: {
+            msg: "Table name is required.",
+          },
+        },
+      },
+      area: {
+        type: DataTypes.STRING(40),
         allowNull: false,
         validate: {
-          async isUnique(value) {
-            const table = await Table.findOne({
-              where: {
-                name: value,
-              },
-            });
-            if (table) throw new Error("Table with this name already exists!");
-          },
-          notEmpty: {
-            arg: true,
-            msg: "Table name shouldn't be blank!",
+          isIn: {
+            args: [appSettings.seatingAreas],
+            msg: "Area must match a configured Kaya seating area.",
           },
         },
       },
       capacity: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 1,
         validate: {
-          notEmpty: {
-            arg: true,
-            msg: "Capacity shouldn't be blank!",
-          },
           isInt: {
-            arg: true,
-            msg: "Should be an integer value!",
+            msg: "Capacity must be an integer.",
           },
           min: {
             args: [1],
-            msg: "One seat needed at least!",
-          },
-          max: {
-            args: [8],
-            msg: "Maximum 8 seats per table!",
+            msg: "Capacity must be at least 1.",
           },
         },
       },
-      isOccupied: {
-        allowNull: false,
+      isActive: {
         type: DataTypes.BOOLEAN,
-        defaultValue: false,
+        allowNull: false,
+        defaultValue: true,
+      },
+      notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
       },
     },
     {
       sequelize,
       modelName: "table",
-      indexes: [
-        {
-          unique: true,
-          fields: ["name"],
-        },
-      ],
+      tableName: "tables",
+      underscored: true,
     }
   );
+
   return Table;
 };

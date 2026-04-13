@@ -1,78 +1,125 @@
 "use strict";
 const { Model } = require("sequelize");
-const dateTimeValidator = require("../../utils/dateAndTimeValidator");
+const appSettings = require("../../config/appSettings");
+
+const RESERVATION_STATUSES = [
+  "confirmed",
+  "cancelled",
+  "completed",
+  "no_show",
+];
+
+const RESERVATION_SOURCES = [
+  "phone_agent",
+  "whatsapp",
+  "staff_dashboard",
+  "manual",
+  "web",
+];
+
 module.exports = (sequelize, DataTypes) => {
   class Reservation extends Model {
     static associate(models) {
       Reservation.belongsTo(models.customer, {
-        foreignKey: {
-          allowNull: false,
-        },
-        onDelete: "cascade",
-        onUpdate: "cascade",
-        hooks: true,
+        foreignKey: "customerId",
+        as: "customer",
       });
-      Reservation.hasMany(models.table, {
-        onUpdate: "cascade",
-        hooks: true,
+      Reservation.belongsTo(models.table, {
+        foreignKey: "tableId",
+        as: "table",
       });
     }
   }
+
   Reservation.init(
     {
-      resDate: {
+      reservationDate: {
         type: DataTypes.DATEONLY,
         allowNull: false,
         validate: {
           notEmpty: {
-            args: true,
-            msg: "Please enter reservation date!",
+            msg: "Reservation date is required.",
           },
-          isDateInThePast(value) {
-            const currDate = dateTimeValidator.asDateString(new Date());
-            if (dateTimeValidator.isDateInThePast(currDate, value))
-              throw new Error("Given date is in the past!");
+          isDate: {
+            msg: "Reservation date must be a valid date.",
           },
         },
       },
-      resTime: {
+      startTime: {
         type: DataTypes.TIME,
         allowNull: false,
         validate: {
           notEmpty: {
-            args: true,
-            msg: "Please enter reservation time!",
+            msg: "Start time is required.",
           },
         },
       },
-      people: {
+      endTime: {
+        type: DataTypes.TIME,
+        allowNull: false,
+        validate: {
+          notEmpty: {
+            msg: "End time is required.",
+          },
+        },
+      },
+      guestCount: {
         type: DataTypes.INTEGER,
         allowNull: false,
         validate: {
           isInt: {
-            arg: true,
-            msg: "Should be an integer value!",
+            msg: "Guest count must be an integer.",
           },
           min: {
             args: [1],
-            msg: "One person at least!",
-          },
-          max: {
-            args: [20],
-            msg: "Maximum 20 people per reservation!",
+            msg: "Guest count must be at least 1.",
           },
         },
       },
-      resStatus: {
-        type: DataTypes.ENUM("pending", "seated", "missed"),
+      seatingArea: {
+        type: DataTypes.STRING(40),
+        allowNull: true,
+        validate: {
+          isValidConfiguredArea(value) {
+            if (!value) return;
+            if (!appSettings.seatingAreas.includes(value)) {
+              throw new Error(
+                "Seating area must match a configured Kaya seating area."
+              );
+            }
+          },
+        },
+      },
+      status: {
+        type: DataTypes.ENUM(...RESERVATION_STATUSES),
         allowNull: false,
-        defaultValue: "pending",
+        defaultValue: "confirmed",
+      },
+      source: {
+        type: DataTypes.ENUM(...RESERVATION_SOURCES),
+        allowNull: false,
+        defaultValue: "manual",
+      },
+      specialRequest: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      idempotencyKey: {
+        type: DataTypes.STRING(120),
+        allowNull: true,
+        unique: true,
       },
     },
     {
       sequelize,
       modelName: "reservation",
+      tableName: "reservations",
+      underscored: true,
     }
   );
+
+  Reservation.RESERVATION_STATUSES = RESERVATION_STATUSES;
+  Reservation.RESERVATION_SOURCES = RESERVATION_SOURCES;
+
   return Reservation;
 };

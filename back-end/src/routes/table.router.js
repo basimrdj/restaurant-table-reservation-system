@@ -6,13 +6,13 @@ const tableController = require("../controllers/table.controller");
 
 router
   .route("/")
-  .get(tryCatchHandler(tableController.getAllHandler))
-  .post(tryCatchHandler(tableController.registerHandler))
+  .get(tryCatchHandler(tableController.listHandler))
+  .post(tryCatchHandler(tableController.createHandler))
   .all(httpMethodError);
 
 router
   .route("/:tableId")
-  .delete(tryCatchHandler(tableController.freeTableHandler))
+  .patch(tryCatchHandler(tableController.updateHandler))
   .all(httpMethodError);
 
 module.exports = router;

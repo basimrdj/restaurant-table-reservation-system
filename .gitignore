@@ -1,0 +1,5 @@
+.ace-tool/
+.DS_Store
+*.sqlite3
+.env
+node_modules/

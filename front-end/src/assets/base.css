@@ -1,19 +1,26 @@
 :root {
-  --primary-red: #ff0022;
-  --snow-white: #edfdfb;
-  --primary-gray: #b9bab8;
-  --secondary-gray: #686868;
-  --darker-gray: #343434;
-  --lighter-gray: #9a9a9a;
-  --light-pink: #f8e9f2;
-  --primary-black: #04030f;
-  --accent-red: #ef4444;
-  --primary-blue: #3b82f6;
-  --primary-green: #22c55e;
-  --primary-white: #ffffff;
+  --primary-red: #8d2f2f;
+  --snow-white: #fff4e4;
+  --primary-gray: #e4d8c5;
+  --secondary-gray: #73655c;
+  --darker-gray: #342a26;
+  --lighter-gray: #b7a89f;
+  --light-pink: #f6efe7;
+  --primary-black: #181311;
+  --accent-red: #a63a3a;
+  --primary-blue: #315f91;
+  --primary-green: #2f6f56;
+  --primary-white: #fffaf5;
   --darkened-color: rgba(0, 0, 0, 0.25);
+  --canvas: #f6efe7;
+  --surface: #fffaf5;
+  --surface-alt: #f2e8dd;
+  --line: rgba(71, 52, 41, 0.12);
+  --brand-gold: #cda15b;
+  --brand-brown: #6f4a22;
+  --text-on-dark: #fff4e4;
 
-  --top-spacing: 85px;
+  --top-spacing: 88px;
   --x-spacing-desktop: 60px;
   --x-spacing-mobile: 20px;
   --opacity-val: 0;
@@ -49,7 +56,7 @@ button {
 body {
   margin: 0;
   color: var(--primary-black);
-  background: var(--light-pink);
+  background: var(--canvas);
   transition: color 0.5s, background-color 0.5s;
   line-height: 1.6;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -59,4 +66,8 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
 }

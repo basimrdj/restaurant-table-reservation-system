@@ -35,12 +35,13 @@ onMounted(() => {
 <template>
   <header>
     <nav>
-      <img
-        class="logo"
-        src="@/assets/images/rtrs.png"
-        alt="Logo"
-        @click="router.push({ name: 'home' })"
-      />
+      <button class="brand" @click="router.push({ name: 'home' })">
+        <span class="brand-mark">K</span>
+        <span class="brand-copy">
+          <strong>Kaya</strong>
+          <small>Reservation System</small>
+        </span>
+      </button>
       <div v-show="!isMobile" class="nav-links">
         <NavItems />
       </div>
@@ -64,7 +65,8 @@ onMounted(() => {
 
 <style scoped>
 header {
-  background-color: var(--primary-red);
+  background-color: rgba(32, 18, 18, 0.95);
+  backdrop-filter: blur(18px);
   position: fixed;
   width: 100%;
   top: 0;
@@ -73,18 +75,53 @@ header {
 }
 nav {
   display: flex;
-  padding: 5px var(--x-spacing-mobile);
+  padding: 0.8rem var(--x-spacing-mobile);
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
 }
-.logo {
-  width: 180px;
-  height: 75px;
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: transparent;
+  color: var(--text-on-dark);
   cursor: pointer;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #cda15b, #7d5524);
+  color: #fff7ea;
+  font-family: "Jost-Bold";
+  font-size: 1.25rem;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.05;
+}
+
+.brand-copy strong {
+  font-family: "Jost-Bold";
+  font-size: 1.2rem;
+}
+
+.brand-copy small {
+  color: rgba(255, 244, 228, 0.78);
+  font-size: 0.78rem;
 }
 .nav-links {
   font-size: 12px;
-  color: var(--snow-white);
+  color: var(--text-on-dark);
 }
 
 .overlay {
@@ -99,7 +136,7 @@ nav {
   background-color: var(--darkened-color);
 }
 
-.mobile-nav {
+  .mobile-nav {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -111,7 +148,7 @@ nav {
   width: 100%;
   height: 100%;
   max-width: 250px;
-  background-color: var(--snow-white);
+  background-color: var(--surface);
 }
 
 .mobile-nav-items {
@@ -145,7 +182,7 @@ nav {
 
 @media screen and (min-width: 1024px) {
   nav {
-    padding: 5px var(--x-spacing-desktop);
+    padding: 0.8rem var(--x-spacing-desktop);
   }
   .nav-links {
     font-size: 14px;

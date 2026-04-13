@@ -1,98 +1,51 @@
-<script setup>
-import NavItem from "@/components/NavItem.vue";
-
-import { useRouter } from "vue-router";
-
-const router = useRouter();
-</script>
-
 <template>
   <footer>
     <div class="footer-wrapper">
-      <nav>
-        <NavItem class="item" route-name="reservations" text="Reservations" />
-        <NavItem
-          class="item"
-          route-name="new-reservation"
-          text="New Reservation"
-        />
-        <div>
-          <img
-            class="secondary-logo"
-            src="@/assets/images/secondary-logo.png"
-            alt="secondary-logo"
-            @click="router.push({ name: 'home' })"
-          />
-        </div>
-        <NavItem class="item" route-name="search" text="Search" />
-        <NavItem class="item" route-name="add-table" text="Add Table" />
-      </nav>
+      <div class="brand">Kaya Reservation System</div>
       <div class="line"></div>
-      <div class="copyright">© Restaurant System, Inc. 2022.</div>
-      <div class="copyright">Made by: Slavyan Hristov</div>
+      <div class="copyright">
+        Internal staff dashboard for customers, reservations, closures, and
+        Retell-ready operations.
+      </div>
     </div>
   </footer>
 </template>
 
 <style scoped>
 footer {
-  background-color: var(--primary-black);
+  background-color: #1f1715;
   font-family: "Montserrat-Normal";
-  font-weight: lighter;
 }
 .footer-wrapper {
   display: flex;
   justify-content: center;
   flex-direction: column;
   align-items: center;
-  gap: 35px;
+  gap: 1rem;
   width: 100%;
-  padding: 100px var(--x-spacing-mobile);
-}
-
-.secondary-logo {
-  height: 50px;
-  width: 50px;
-  cursor: pointer;
-}
-
-nav {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--snow-white);
-}
-
-.item {
-  width: 0;
-  flex: 1 1 0;
-  font-size: 10px;
+  padding: 2.6rem var(--x-spacing-mobile);
 }
 
 .line {
   height: 1px;
-  width: 70%;
-  background-color: var(--light-pink);
-  margin-left: 50px;
-  margin-right: 50px;
+  width: min(720px, 100%);
+  background-color: rgba(255, 240, 223, 0.12);
+}
+
+.brand {
+  color: var(--text-on-dark);
+  font-family: "Jost-Bold";
+  font-size: 1.2rem;
 }
 
 .copyright {
-  color: var(--primary-gray);
-  font-size: 10px;
+  color: rgba(255, 244, 228, 0.72);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 720px;
 }
 
 @media screen and (min-width: 1024px) {
-  .wrapper {
-    padding: 100px var(--x-spacing-desktop);
-  }
-  nav {
-    width: 80%;
-  }
-  .item {
-    font-size: 14px;
-  }
   .copyright {
     font-size: 14px;
   }

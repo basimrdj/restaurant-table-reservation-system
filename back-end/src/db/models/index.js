@@ -4,23 +4,46 @@ const fs = require("fs");
 const path = require("path");
 const Sequelize = require("sequelize");
 const logger = require("../../utils/logger");
+const appSettings = require("../../config/appSettings");
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || "development";
 const config = require(__dirname + "/../../../config/config.js")[env];
 const db = {};
 
 const createDBConnection = () => {
-  return new Sequelize(config.database, config.username, config.password, {
-    host: config.host,
+  const sequelizeConfig = {
     dialect: config.dialect,
-    logging: (message) => {
-      logger.info(message);
-    },
-    timezone: "Europe/Sofia",
-    dialectOptions: {
+    logging:
+      config.logging === false
+        ? false
+        : (message) => {
+            logger.info(message);
+          },
+  };
+
+  if (config.host) {
+    sequelizeConfig.host = config.host;
+  }
+
+  if (config.port) {
+    sequelizeConfig.port = config.port;
+  }
+
+  if (config.storage) {
+    sequelizeConfig.storage = config.storage;
+  } else {
+    sequelizeConfig.timezone = appSettings.timezone;
+    sequelizeConfig.dialectOptions = {
       timezone: "local",
-    },
-  });
+    };
+  }
+
+  return new Sequelize(
+    config.database,
+    config.username,
+    config.password,
+    sequelizeConfig
+  );
 };
 
 const sequelize = createDBConnection();

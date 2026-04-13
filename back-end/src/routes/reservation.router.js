@@ -6,19 +6,23 @@ const reservationController = require("../controllers/reservation.controller");
 
 router
   .route("/")
-  .get(tryCatchHandler(reservationController.getAllHandler))
-  .post(tryCatchHandler(reservationController.registerHandler))
+  .get(tryCatchHandler(reservationController.listHandler))
+  .post(tryCatchHandler(reservationController.createHandler))
   .all(httpMethodError);
 
 router
   .route("/:reservationId")
-  .patch(tryCatchHandler(reservationController.editHandler))
-  .delete(tryCatchHandler(reservationController.cancelHandler))
+  .patch(tryCatchHandler(reservationController.updateHandler))
   .all(httpMethodError);
 
 router
-  .route("/choose-table/:reservationId")
-  .post(tryCatchHandler(reservationController.chooseTableHandler))
+  .route("/:reservationId/cancel")
+  .post(tryCatchHandler(reservationController.cancelHandler))
+  .all(httpMethodError);
+
+router
+  .route("/:reservationId/status")
+  .post(tryCatchHandler(reservationController.statusHandler))
   .all(httpMethodError);
 
 module.exports = router;
