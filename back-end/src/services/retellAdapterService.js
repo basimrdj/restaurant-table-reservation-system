@@ -607,6 +607,11 @@ const getRelativeDateOffset = (normalized) => {
     return RELATIVE_DATE_OFFSETS[stripped];
   }
 
+  const firstToken = (normalized.split(" ")[0] || "").trim();
+  if (firstToken && RELATIVE_DATE_OFFSETS[firstToken] !== undefined) {
+    return RELATIVE_DATE_OFFSETS[firstToken];
+  }
+
   return null;
 };
 
@@ -1165,7 +1170,7 @@ const buildCreateReservationFailure = (error, alternatives = null) => ({
   success: "false",
   user_safe_message:
     error?.message ||
-    "معذرت، ابھی booking مکمل نہیں ہو سکی۔ اگر آپ چاہیں تو میں reception سے connect کر دیتا ہوں۔",
+    "معذرت، ابھی booking مکمل نہیں ہو سکی۔",
 });
 
 const buildCreateReservationSuccess = (result) => ({

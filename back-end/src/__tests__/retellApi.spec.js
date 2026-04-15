@@ -187,7 +187,7 @@ describe("Retell API", () => {
         args: {
           availability_error_retry_count: "0",
           guest_count: "4",
-          reservation_date: "15 April",
+          reservation_date: "20 April",
           reservation_time: "shaam 7 baje",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -210,13 +210,12 @@ describe("Retell API", () => {
   });
 
   it.each([
-    "پندرہ April",
-    "پندرہ اپریل",
-    "पंद्रह April",
-    "पन्द्रह April",
-    "पंद्रह अप्रैल",
+    "بیس April",
+    "بیس اپریل",
+    "बीस April",
+    "बीस अप्रैल",
   ])(
-    "normalizes mixed-script Hindi date words like %s into a valid booking date",
+    "normalizes mixed-script Urdu/Hindi date words like %s into a valid booking date",
     async (spokenDate) => {
       const response = await request(app)
         .post("/api/retell/check-availability")
@@ -246,14 +245,14 @@ describe("Retell API", () => {
     }
   );
 
-  it("resolves Hindi-script explicit evening context without asking for AM or PM again", async () => {
+  it("resolves Urdu/Hindi-script explicit evening context without asking for AM or PM again", async () => {
     const response = await request(app)
       .post("/api/retell/check-availability")
       .send({
         args: {
           availability_error_retry_count: "0",
           guest_count: "4",
-          reservation_date: "15 April",
+          reservation_date: "20 April",
           reservation_time: "सात बजे शाम",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -275,14 +274,14 @@ describe("Retell API", () => {
     );
   });
 
-  it("resolves mixed Latin digit plus Hindi-script daypart directly", async () => {
+  it("resolves mixed Latin digit plus Urdu/Hindi-script daypart directly", async () => {
     const response = await request(app)
       .post("/api/retell/check-availability")
       .send({
         args: {
           availability_error_retry_count: "0",
           guest_count: "4",
-          reservation_date: "15 April",
+          reservation_date: "20 April",
           reservation_time: "7 बजे शाम",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -303,14 +302,14 @@ describe("Retell API", () => {
     );
   });
 
-  it("resolves Hindi-script morning context directly", async () => {
+  it("resolves Urdu-script morning context directly", async () => {
     const response = await request(app)
       .post("/api/retell/check-availability")
       .send({
         args: {
           availability_error_retry_count: "0",
           guest_count: "4",
-          reservation_date: "15 April",
+          reservation_date: "20 April",
           reservation_time: "सुबह 9 बजे",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -338,7 +337,7 @@ describe("Retell API", () => {
         args: {
           availability_error_retry_count: "0",
           guest_count: "4",
-          reservation_date: "15 April",
+          reservation_date: "20 April",
           reservation_time: "7 pm",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -358,14 +357,14 @@ describe("Retell API", () => {
     );
   });
 
-  it("accepts the exact Hindi mixed-script follow-up scenario without leaking date-format language", async () => {
+  it("accepts the exact Urdu/Hindi mixed-script follow-up scenario without leaking date-format language", async () => {
     const response = await request(app)
       .post("/api/retell/check-availability")
       .send({
         args: {
           availability_error_retry_count: "0",
           guest_count: "2",
-          reservation_date: "पंद्रह April",
+          reservation_date: "बीस April",
           reservation_time: "शाम सात बजे",
           seating_preference: "indoor rooftop",
           time_clarification_attempts: "0",
@@ -388,8 +387,8 @@ describe("Retell API", () => {
   });
 
   it("auto-resolves 7 baje to evening when only evening fits Kaya opening hours", async () => {
-    const reservationDate = "15 April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "20 April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "17:00:00", "23:00:00");
 
     const response = await request(app)
@@ -521,8 +520,8 @@ describe("Retell API", () => {
   });
 
   it("returns a structured ambiguity response for spoken times that should not be guessed", async () => {
-    const reservationDate = "15 April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "20 April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "07:00:00", "23:00:00");
 
     const response = await request(app)
@@ -586,8 +585,8 @@ describe("Retell API", () => {
   });
 
   it("returns a closed-time response instead of an ambiguity loop when the explicit time is outside opening hours", async () => {
-    const reservationDate = "15 April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "20 April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "17:00:00", "23:00:00");
 
     const response = await request(app)
@@ -621,8 +620,8 @@ describe("Retell API", () => {
   });
 
   it("resolves Urdu-script bare سات بجے to evening when only evening fits Kaya opening hours", async () => {
-    const reservationDate = "پندرہ April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "بیس April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "17:00:00", "23:00:00");
 
     const response = await request(app)
@@ -654,8 +653,8 @@ describe("Retell API", () => {
   });
 
   it("returns an Urdu-first closed-time response for صبح 7 بجے", async () => {
-    const reservationDate = "پندرہ April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "بیس April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "17:00:00", "23:00:00");
 
     const response = await request(app)
@@ -689,8 +688,8 @@ describe("Retell API", () => {
   });
 
   it("asks for ambiguous AM or PM at most once unless the user changes the time", async () => {
-    const reservationDate = "15 April";
-    const resolvedDate = "2026-04-15";
+    const reservationDate = "20 April";
+    const resolvedDate = "2026-04-20";
     await setOperatingHoursForDate(resolvedDate, "07:00:00", "23:00:00");
 
     const firstAttempt = await request(app)
