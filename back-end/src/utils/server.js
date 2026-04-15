@@ -15,7 +15,12 @@ const createServer = () => {
   const app = express();
 
   app.use(cors());
-  app.use(helmet({ crossOriginResourcePolicy: false })); // middleware for more secure response headers
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  ); // middleware for more secure response headers
   app.use(express.json());
   app.get("/healthz", (req, res) =>
     res.status(200).json({
