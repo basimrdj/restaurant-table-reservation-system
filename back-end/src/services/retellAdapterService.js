@@ -305,12 +305,15 @@ const normalizeFreeText = (value) =>
     .replace(/[,_-]+/g, " ")
     .replace(/\s+/g, " ");
 
+const RETELL_NULL_STRINGS = new Set(["null", "undefined", "none", "nil"]);
+
 const toRetellString = (value) => {
   if (value === undefined || value === null) {
     return "";
   }
 
-  return String(value);
+  const str = String(value).trim();
+  return RETELL_NULL_STRINGS.has(str.toLowerCase()) ? "" : str;
 };
 
 const toRetellBoolean = (value) => (value ? "true" : "false");
@@ -640,7 +643,7 @@ const isTimeWithinOperatingHours = (candidateTime, durationMinutes, operatingHou
 
 const parseSpokenDate = (value) => {
   const rawValue = String(value || "").trim();
-  if (!rawValue) {
+  if (!rawValue || RETELL_NULL_STRINGS.has(rawValue.toLowerCase())) {
     return { kind: "empty", value: "" };
   }
 
@@ -721,7 +724,7 @@ const parseSpokenDate = (value) => {
 
 const parseSpokenTime = (value) => {
   const rawValue = String(value || "").trim();
-  if (!rawValue) {
+  if (!rawValue || RETELL_NULL_STRINGS.has(rawValue.toLowerCase())) {
     return { kind: "empty", value: "" };
   }
 
