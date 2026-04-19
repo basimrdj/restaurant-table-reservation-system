@@ -634,6 +634,11 @@ const isTimeWithinOperatingHours = (candidateTime, durationMinutes, operatingHou
   }
 
   const endTime = addMinutes(candidateTime, durationMinutes);
+  const wrapsToNextDay = toMinutes(endTime) <= toMinutes(candidateTime);
+
+  if (wrapsToNextDay) {
+    return false;
+  }
 
   return (
     toMinutes(candidateTime) >= toMinutes(operatingHour.openTime) &&

@@ -687,6 +687,40 @@ describe("Retell API", () => {
     expect(response.body.user_safe_message).toContain("شام 7 بجے");
   });
 
+  it("treats late times that wrap into the next day as a closed-time response", async () => {
+    const reservationDate = "بیس April";
+    const resolvedDate = "2026-04-20";
+    await setOperatingHoursForDate(resolvedDate, "13:00:00", "01:00:00");
+
+    const response = await request(app)
+      .post("/api/retell/check-availability")
+      .send({
+        args: {
+          availability_error_retry_count: "0",
+          guest_count: "2",
+          reservation_date: reservationDate,
+          reservation_time: "رات 11 بجے",
+          seating_preference: "indoor",
+          time_clarification_attempts: "0",
+          time_resolution_status: "unresolved",
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        availability_error: "false",
+        available: "false",
+        normalized_reservation_time: "",
+        success: "true",
+        time_ambiguous: "false",
+        time_resolution_status: "closed",
+      })
+    );
+    expect(response.body.user_safe_message).toContain("رات 11 بجے");
+    expect(response.body.user_safe_message).not.toContain("duration_minutes creates an invalid time range");
+  });
+
   it("asks for ambiguous AM or PM at most once unless the user changes the time", async () => {
     const reservationDate = "20 April";
     const resolvedDate = "2026-04-20";
