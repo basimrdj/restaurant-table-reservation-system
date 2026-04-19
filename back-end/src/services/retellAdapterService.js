@@ -485,9 +485,9 @@ const buildClosedTimeMessage = (operatingHour, dateLabel = "اس دن", requeste
     ? ` کیا آپ ${formatTimeForSpeech(suggestedTime)} یا اس کے بعد کا وقت دیکھنا چاہیں گے؟`
     : "";
 
-  return `معذرت، ${requestedLabel}ہمارا restaurant open نہیں ہوتا۔ ہماری timings ${formatOperatingWindow(
+  return `معذرت، ${requestedLabel}نئی ڈائننگ reservation ممکن نہیں ہوتی۔ ہماری timings ${formatOperatingWindow(
     operatingHour
-  )} ہیں۔${suggestionLine}`;
+  )} ہیں، اس لیے آخری مناسب وقت اس سے پہلے ہوتا ہے۔${suggestionLine}`;
 };
 
 const formatAlternativeAreas = (areas) =>
@@ -890,11 +890,37 @@ const buildTimeResolutionState = async ({
   }
 
   if (parsedTime.kind === "ok") {
+    const operatingHour =
+      parsedDate.kind === "ok" ? await getOperatingHourForDate(parsedDate.value) : null;
+
+    if (
+      parsedDate.kind === "ok" &&
+      !isTimeWithinOperatingHours(
+        parsedTime.value,
+        requestedDurationMinutes,
+        operatingHour
+      )
+    ) {
+      return {
+        availabilityError: false,
+        closedTimeMessage: buildClosedTimeMessage(
+          operatingHour,
+          formatDateForSpeech(parsedDate.value),
+          parsedTime.value
+        ),
+        normalizedTime: "",
+        operatingHour,
+        parsedDate,
+        timeAmbiguous: false,
+        timeClarificationAttempts: "0",
+        timeResolutionStatus: "closed",
+      };
+    }
+
     return {
       availabilityError: false,
       normalizedTime: parsedTime.value,
-      operatingHour:
-        parsedDate.kind === "ok" ? await getOperatingHourForDate(parsedDate.value) : null,
+      operatingHour,
       parsedDate,
       timeAmbiguous: false,
       timeClarificationAttempts: "0",
