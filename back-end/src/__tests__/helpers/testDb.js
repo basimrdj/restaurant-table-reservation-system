@@ -4,7 +4,7 @@ const seedOperatingHours = async () => {
   const rows = Array.from({ length: 7 }, (_, dayOfWeek) => ({
     dayOfWeek,
     openTime: "13:00:00",
-    closeTime: "23:00:00",
+    closeTime: "24:00:00",
     isClosed: false,
   }));
 

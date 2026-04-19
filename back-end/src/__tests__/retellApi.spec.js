@@ -322,10 +322,10 @@ describe("Retell API", () => {
       expect.objectContaining({
         availability_error: "false",
         available: "false",
-        normalized_reservation_time: "09:00:00",
+        normalized_reservation_time: "",
         success: "true",
         time_ambiguous: "false",
-        time_resolution_status: "resolved",
+        time_resolution_status: "closed",
       })
     );
   });
@@ -462,6 +462,69 @@ describe("Retell API", () => {
     );
     expect(response.body.alternative_areas).toContain("indoor rooftop");
     expect(response.body.alternative_slots).not.toBe("");
+  });
+
+  it("treats exact closing-time requests as a clean closed-time response instead of a raw validation error", async () => {
+    const reservationDate = futureDate(2);
+    await setOperatingHoursForDate(reservationDate, "13:00:00", "23:00:00");
+
+    const response = await request(app)
+      .post("/api/retell/check-availability")
+      .send({
+        args: {
+          availability_error_retry_count: "0",
+          guest_count: "2",
+          reservation_date: reservationDate,
+          reservation_time: "رات 11 بجے",
+          seating_preference: "indoor",
+          time_clarification_attempts: "0",
+          time_resolution_status: "unresolved",
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        availability_error: "false",
+        available: "false",
+        success: "true",
+        time_ambiguous: "false",
+        time_resolution_status: "closed",
+      })
+    );
+    expect(response.body.user_safe_message).toMatch(/نئی ڈائننگ reservation ممکن نہیں ہوتی/);
+    expect(response.body.user_safe_message).not.toMatch(/invalid time range/i);
+  });
+
+  it("accepts 11 PM as the final same-day seating when Kaya closes at midnight", async () => {
+    const reservationDate = futureDate(2);
+    await setOperatingHoursForDate(reservationDate, "13:00:00", "24:00:00");
+
+    const response = await request(app)
+      .post("/api/retell/check-availability")
+      .send({
+        args: {
+          availability_error_retry_count: "0",
+          guest_count: "2",
+          reservation_date: reservationDate,
+          reservation_time: "رات 11 بجے",
+          seating_preference: "indoor",
+          time_clarification_attempts: "0",
+          time_resolution_status: "unresolved",
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        availability_error: "false",
+        available: "true",
+        normalized_reservation_time: "23:00:00",
+        success: "true",
+        time_ambiguous: "false",
+        time_resolution_status: "resolved",
+      })
+    );
   });
 
   it("treats empty guest_count as a Retell-facing availability error instead of unavailability", async () => {
@@ -608,14 +671,14 @@ describe("Retell API", () => {
       expect.objectContaining({
         availability_error: "false",
         available: "false",
-        normalized_reservation_time: "12:00:00",
+        normalized_reservation_time: "",
         success: "true",
         time_ambiguous: "false",
         time_clarification_attempts: "0",
-        time_resolution_status: "resolved",
+        time_resolution_status: "closed",
       })
     );
-    expect(response.body.user_safe_message).toContain("ہمارا restaurant open نہیں ہوتا");
+    expect(response.body.user_safe_message).toContain("نئی ڈائننگ reservation ممکن نہیں ہوتی");
     expect(response.body.user_safe_message).toContain("شام 7 بجے");
   });
 
@@ -676,21 +739,21 @@ describe("Retell API", () => {
       expect.objectContaining({
         availability_error: "false",
         available: "false",
-        normalized_reservation_time: "07:00:00",
+        normalized_reservation_time: "",
         success: "true",
         time_ambiguous: "false",
-        time_resolution_status: "resolved",
+        time_resolution_status: "closed",
       })
     );
     expect(response.body.user_safe_message).toContain("صبح 7 بجے");
-    expect(response.body.user_safe_message).toContain("ہمارا restaurant open نہیں ہوتا");
+    expect(response.body.user_safe_message).toContain("نئی ڈائننگ reservation ممکن نہیں ہوتی");
     expect(response.body.user_safe_message).toContain("شام 7 بجے");
   });
 
-  it("treats late times that wrap into the next day as a closed-time response", async () => {
+  it("rejects requests that are later than the final midnight seating window", async () => {
     const reservationDate = "بیس April";
     const resolvedDate = "2026-04-20";
-    await setOperatingHoursForDate(resolvedDate, "13:00:00", "01:00:00");
+    await setOperatingHoursForDate(resolvedDate, "13:00:00", "24:00:00");
 
     const response = await request(app)
       .post("/api/retell/check-availability")
@@ -699,7 +762,7 @@ describe("Retell API", () => {
           availability_error_retry_count: "0",
           guest_count: "2",
           reservation_date: reservationDate,
-          reservation_time: "رات 11 بجے",
+          reservation_time: "رات 11:30 بجے",
           seating_preference: "indoor",
           time_clarification_attempts: "0",
           time_resolution_status: "unresolved",
@@ -717,7 +780,7 @@ describe("Retell API", () => {
         time_resolution_status: "closed",
       })
     );
-    expect(response.body.user_safe_message).toContain("رات 11 بجے");
+    expect(response.body.user_safe_message).toContain("رات 11:30 بجے");
     expect(response.body.user_safe_message).not.toContain("duration_minutes creates an invalid time range");
   });
 

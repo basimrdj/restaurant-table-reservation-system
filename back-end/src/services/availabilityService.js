@@ -5,7 +5,10 @@ const reservationDAO = require("../DAOs/reservation.dao");
 const tableDAO = require("../DAOs/table.dao");
 const AppError = require("../utils/appError");
 const {
-  addMinutes,
+  hasOperatingWindow,
+  resolveReservationWindow,
+} = require("../utils/reservationWindow");
+const {
   compareDate,
   getCurrentDateStringInTimezone,
   getCurrentTimeStringInTimezone,
@@ -32,7 +35,6 @@ const normalizeAvailabilityRequest = (payload) => {
   const durationMinutes = payload.duration_minutes
     ? assertPositiveInteger(payload.duration_minutes, "duration_minutes")
     : appSettings.defaultReservationDurationMinutes;
-  const endTime = addMinutes(startTime, durationMinutes);
   const seatingPreference = payload.seating_preference || null;
 
   if (
@@ -43,14 +45,6 @@ const normalizeAvailabilityRequest = (payload) => {
       400,
       "VALIDATION_ERROR",
       `seating_preference must be one of: ${appSettings.seatingAreas.join(", ")}.`
-    );
-  }
-
-  if (toMinutes(endTime) <= toMinutes(startTime)) {
-    throw new AppError(
-      400,
-      "VALIDATION_ERROR",
-      "duration_minutes creates an invalid time range."
     );
   }
 
@@ -78,10 +72,61 @@ const normalizeAvailabilityRequest = (payload) => {
   return {
     reservationDate,
     startTime,
-    endTime,
     guestCount,
     durationMinutes,
     seatingPreference,
+  };
+};
+
+const buildTimingUnavailableExplanation = ({
+  operatingHour,
+  timingResolution,
+}) => {
+  if (!hasOperatingWindow(operatingHour)) {
+    return "Kaya is closed on the requested day.";
+  }
+
+  if (timingResolution?.reason === "insufficient_time_before_close") {
+    return "The requested reservation time is too close to Kaya's closing time.";
+  }
+
+  return "The requested reservation time falls outside Kaya's opening hours.";
+};
+
+const prepareAvailabilityRequest = async (payload) => {
+  const request = normalizeAvailabilityRequest(payload);
+  const operatingHour = await operatingHourDAO.findOperatingHourByDay(
+    getDayOfWeek(request.reservationDate)
+  );
+  const timingResolution = resolveReservationWindow({
+    operatingHour,
+    requestedDurationMinutes: request.durationMinutes,
+    startTime: request.startTime,
+  });
+
+  if (!timingResolution.allowed) {
+    return {
+      ok: false,
+      explanation: buildTimingUnavailableExplanation({
+        operatingHour,
+        timingResolution,
+      }),
+      operatingHour,
+      request,
+      timingResolution,
+    };
+  }
+
+  return {
+    ok: true,
+    operatingHour,
+    request: {
+      ...request,
+      requestedDurationMinutes: request.durationMinutes,
+      durationMinutes: timingResolution.effectiveDurationMinutes,
+      endTime: timingResolution.endTime,
+    },
+    timingResolution,
   };
 };
 
@@ -133,16 +178,19 @@ const findDirectMatch = async ({
   transaction = null,
   lockTables = false,
   areaOverride = null,
+  operatingHour = null,
 }) => {
-  const operatingHour = await operatingHourDAO.findOperatingHourByDay(
-    getDayOfWeek(request.reservationDate)
-  );
+  const resolvedOperatingHour =
+    operatingHour ||
+    (await operatingHourDAO.findOperatingHourByDay(
+      getDayOfWeek(request.reservationDate)
+    ));
 
   if (
-    !operatingHour ||
-    operatingHour.isClosed ||
-    !operatingHour.openTime ||
-    !operatingHour.closeTime
+    !resolvedOperatingHour ||
+    resolvedOperatingHour.isClosed ||
+    !resolvedOperatingHour.openTime ||
+    !resolvedOperatingHour.closeTime
   ) {
     return buildUnavailableResponse({
       explanation: "Kaya is closed on the requested day.",
@@ -150,8 +198,8 @@ const findDirectMatch = async ({
   }
 
   if (
-    toMinutes(request.startTime) < toMinutes(operatingHour.openTime) ||
-    toMinutes(request.endTime) > toMinutes(operatingHour.closeTime)
+    toMinutes(request.startTime) < toMinutes(resolvedOperatingHour.openTime) ||
+    toMinutes(request.endTime) > toMinutes(resolvedOperatingHour.closeTime)
   ) {
     return buildUnavailableResponse({
       explanation:
@@ -233,6 +281,7 @@ const findAlternativeAreas = async ({
   request,
   excludeReservationId,
   transaction,
+  operatingHour,
 }) => {
   if (!request.seatingPreference) return [];
 
@@ -245,6 +294,7 @@ const findAlternativeAreas = async ({
       excludeReservationId,
       transaction,
       areaOverride: area,
+      operatingHour,
     });
 
     if (result.available) {
@@ -259,9 +309,12 @@ const findNearbyAvailableSlots = async ({
   request,
   excludeReservationId,
   transaction,
+  operatingHour,
 }) => {
   const alternatives = [];
   const seenTimes = new Set();
+  const searchDurationMinutes =
+    request.requestedDurationMinutes || request.durationMinutes;
 
   for (
     let offset = appSettings.alternativeSlotStepMinutes;
@@ -270,31 +323,38 @@ const findNearbyAvailableSlots = async ({
   ) {
     for (const direction of [1, -1]) {
       const rawStartMinutes = toMinutes(request.startTime) + offset * direction;
-      const rawEndMinutes = rawStartMinutes + request.durationMinutes;
+      const rawEndMinutes = rawStartMinutes + searchDurationMinutes;
 
       if (rawStartMinutes < 0 || rawEndMinutes > 24 * 60) {
         continue;
       }
 
       const startTime = minutesToTime(rawStartMinutes);
+      const timingResolution = resolveReservationWindow({
+        operatingHour,
+        requestedDurationMinutes: searchDurationMinutes,
+        startTime,
+      });
 
-      if (seenTimes.has(startTime)) continue;
+      if (!timingResolution.allowed || seenTimes.has(startTime)) continue;
       seenTimes.add(startTime);
 
       const result = await findDirectMatch({
         request: {
           ...request,
           startTime,
-          endTime: addMinutes(startTime, request.durationMinutes),
+          durationMinutes: timingResolution.effectiveDurationMinutes,
+          endTime: timingResolution.endTime,
         },
         excludeReservationId,
         transaction,
+        operatingHour,
       });
 
       if (result.available) {
         alternatives.push({
           reservation_time: startTime,
-          end_time: addMinutes(startTime, request.durationMinutes),
+          end_time: timingResolution.endTime,
           matched_area: result.matched_area,
           matched_table_id: result.matched_table_id,
         });
@@ -310,12 +370,22 @@ const findNearbyAvailableSlots = async ({
 };
 
 const checkAvailability = async (payload, options = {}) => {
-  const request = normalizeAvailabilityRequest(payload);
+  const preparedRequest = await prepareAvailabilityRequest(payload);
+
+  if (!preparedRequest.ok) {
+    return buildUnavailableResponse({
+      explanation: preparedRequest.explanation,
+    });
+  }
+
+  const request = preparedRequest.request;
+  const operatingHour = preparedRequest.operatingHour;
   const directMatch = await findDirectMatch({
     request,
     excludeReservationId: options.excludeReservationId || null,
     transaction: options.transaction || null,
     lockTables: Boolean(options.lockTables),
+    operatingHour,
   });
 
   if (directMatch.available || options.skipAlternatives) {
@@ -327,11 +397,13 @@ const checkAvailability = async (payload, options = {}) => {
       request,
       excludeReservationId: options.excludeReservationId || null,
       transaction: options.transaction || null,
+      operatingHour,
     }),
     findNearbyAvailableSlots({
       request,
       excludeReservationId: options.excludeReservationId || null,
       transaction: options.transaction || null,
+      operatingHour,
     }),
   ]);
 
@@ -349,4 +421,5 @@ const checkAvailability = async (payload, options = {}) => {
 module.exports = {
   checkAvailability,
   normalizeAvailabilityRequest,
+  prepareAvailabilityRequest,
 };

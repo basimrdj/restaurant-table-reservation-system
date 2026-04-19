@@ -133,4 +133,20 @@ describe("reservationService", () => {
     expect(lookup.last_party_size).toBe(4);
     expect(lookup.last_visit_summary).toContain("indoor_rooftop");
   });
+
+  it("stores the final 11 PM seating with a one-hour end time at close", async () => {
+    const result = await reservationService.createReservation({
+      customer_name: "Late Guest",
+      phone_number: "03001112222",
+      reservation_date: futureDate(),
+      reservation_time: "23:00",
+      guest_count: 2,
+      seating_preference: "indoor",
+      source: "phone_agent",
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.reservation.start_time).toBe("23:00:00");
+    expect(result.reservation.end_time).toBe("24:00:00");
+  });
 });

@@ -2,6 +2,7 @@ const db = require("../db/models");
 const reservationDAO = require("../DAOs/reservation.dao");
 const customerService = require("./customerService");
 const availabilityService = require("./availabilityService");
+const reservationFeedService = require("./reservationFeedService");
 const AppError = require("../utils/appError");
 const { serializeReservation } = require("../utils/serializers");
 const { assertEnum, assertRequiredFields } = require("../utils/validation");
@@ -61,10 +62,34 @@ const ensureReservationIsMutable = (reservation) => {
   }
 };
 
+const buildAffectedDates = (...dates) => [
+  ...new Set(dates.filter((value) => typeof value === "string" && value)),
+];
+
+const publishReservationMutation = ({
+  action,
+  previousReservationDate = null,
+  previousStatus = null,
+  reservation,
+}) => {
+  reservationFeedService.publishReservationEvent({
+    action,
+    affected_dates: buildAffectedDates(
+      previousReservationDate,
+      reservation?.reservation_date
+    ),
+    previous_reservation_date: previousReservationDate,
+    previous_status: previousStatus,
+    reservation,
+    reservation_id: reservation?.id || null,
+    status: reservation?.status || null,
+  });
+};
+
 const createReservation = async (payload) => {
   const writePayload = buildReservationWritePayload(payload);
 
-  return db.sequelize.transaction(async (transaction) => {
+  const result = await db.sequelize.transaction(async (transaction) => {
     if (writePayload.idempotencyKey) {
       const existingByKey = await reservationDAO.findByIdempotencyKey(
         writePayload.idempotencyKey,
@@ -87,13 +112,23 @@ const createReservation = async (payload) => {
       transaction,
     });
 
-    const normalizedRequest = availabilityService.normalizeAvailabilityRequest({
+    const preparedRequest = await availabilityService.prepareAvailabilityRequest({
       reservation_date: writePayload.reservationDate,
       reservation_time: writePayload.reservationTime,
       guest_count: writePayload.guestCount,
       seating_preference: writePayload.seatingPreference,
       duration_minutes: writePayload.durationMinutes,
     });
+
+    if (!preparedRequest.ok) {
+      throw new AppError(
+        409,
+        "UNAVAILABLE_SLOT",
+        preparedRequest.explanation
+      );
+    }
+
+    const normalizedRequest = preparedRequest.request;
 
     const duplicateReservation =
       await reservationDAO.findActiveDuplicateReservation({
@@ -163,6 +198,15 @@ const createReservation = async (payload) => {
       availability,
     };
   });
+
+  if (result.created) {
+    publishReservationMutation({
+      action: "created",
+      reservation: result.reservation,
+    });
+  }
+
+  return result;
 };
 
 const listReservations = async (filters = {}) => {
@@ -177,6 +221,8 @@ const listReservations = async (filters = {}) => {
 const modifyReservation = async (reservationId, payload) => {
   const existingReservation = await reservationDAO.findReservationById(reservationId);
   ensureReservationIsMutable(existingReservation);
+  const previousReservationDate = existingReservation.reservationDate;
+  const previousStatus = existingReservation.status;
 
   const writePayload = buildReservationWritePayload({
     ...payload,
@@ -190,7 +236,7 @@ const modifyReservation = async (reservationId, payload) => {
     guest_count: payload.guest_count || existingReservation.guestCount,
   });
 
-  return db.sequelize.transaction(async (transaction) => {
+  const reservation = await db.sequelize.transaction(async (transaction) => {
     const lockedReservation = await reservationDAO.findReservationById(
       reservationId,
       { transaction, lock: transaction.LOCK.UPDATE }
@@ -204,13 +250,23 @@ const modifyReservation = async (reservationId, payload) => {
       transaction,
     });
 
-    const normalizedRequest = availabilityService.normalizeAvailabilityRequest({
+    const preparedRequest = await availabilityService.prepareAvailabilityRequest({
       reservation_date: writePayload.reservationDate,
       reservation_time: writePayload.reservationTime,
       guest_count: writePayload.guestCount,
       seating_preference: writePayload.seatingPreference,
       duration_minutes: writePayload.durationMinutes,
     });
+
+    if (!preparedRequest.ok) {
+      throw new AppError(
+        409,
+        "UNAVAILABLE_SLOT",
+        preparedRequest.explanation
+      );
+    }
+
+    const normalizedRequest = preparedRequest.request;
 
     const duplicateReservation =
       await reservationDAO.findActiveDuplicateReservation({
@@ -277,12 +333,25 @@ const modifyReservation = async (reservationId, payload) => {
 
     return getReservationResponse(reservationId, transaction);
   });
+
+  publishReservationMutation({
+    action: "updated",
+    previousReservationDate,
+    previousStatus,
+    reservation,
+  });
+
+  return reservation;
 };
 
 const updateReservationStatus = async (reservationId, status) => {
   assertEnum(status, ReservationModel.RESERVATION_STATUSES, "status");
 
-  return db.sequelize.transaction(async (transaction) => {
+  const existingReservation = await reservationDAO.findReservationById(reservationId);
+  const previousReservationDate = existingReservation?.reservationDate || null;
+  const previousStatus = existingReservation?.status || null;
+
+  const reservation = await db.sequelize.transaction(async (transaction) => {
     const reservation = await reservationDAO.findReservationById(reservationId, {
       transaction,
       lock: transaction.LOCK.UPDATE,
@@ -303,6 +372,15 @@ const updateReservationStatus = async (reservationId, status) => {
     await customerService.syncCustomerLastVisit(reservation.customerId, transaction);
     return getReservationResponse(reservationId, transaction);
   });
+
+  publishReservationMutation({
+    action: status === "cancelled" ? "cancelled" : "status_updated",
+    previousReservationDate,
+    previousStatus,
+    reservation,
+  });
+
+  return reservation;
 };
 
 const cancelReservation = async (reservationId) => {

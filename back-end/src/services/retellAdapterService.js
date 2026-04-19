@@ -2,8 +2,8 @@ const appSettings = require("../config/appSettings");
 const operatingHourDAO = require("../DAOs/operatingHour.dao");
 const AppError = require("../utils/appError");
 const { normalizePhoneToE164 } = require("../utils/phone");
+const { resolveReservationWindow } = require("../utils/reservationWindow");
 const {
-  addMinutes,
   getDayOfWeek,
   getCurrentDateStringInTimezone,
   normalizeTime,
@@ -624,26 +624,11 @@ const hasCue = (normalizedText, tokenSet, cues) =>
   );
 
 const isTimeWithinOperatingHours = (candidateTime, durationMinutes, operatingHour) => {
-  if (
-    !operatingHour ||
-    operatingHour.isClosed ||
-    !operatingHour.openTime ||
-    !operatingHour.closeTime
-  ) {
-    return false;
-  }
-
-  const endTime = addMinutes(candidateTime, durationMinutes);
-  const wrapsToNextDay = toMinutes(endTime) <= toMinutes(candidateTime);
-
-  if (wrapsToNextDay) {
-    return false;
-  }
-
-  return (
-    toMinutes(candidateTime) >= toMinutes(operatingHour.openTime) &&
-    toMinutes(endTime) <= toMinutes(operatingHour.closeTime)
-  );
+  return resolveReservationWindow({
+    operatingHour,
+    requestedDurationMinutes: durationMinutes,
+    startTime: candidateTime,
+  }).allowed;
 };
 
 const parseSpokenDate = (value) => {

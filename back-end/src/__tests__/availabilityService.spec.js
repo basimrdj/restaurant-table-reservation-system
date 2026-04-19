@@ -88,4 +88,28 @@ describe("availabilityService", () => {
     expect(result.available).toBe(false);
     expect(result.alternative_areas).toContain("indoor_rooftop");
   });
+
+  it("allows the final 11 PM seating by shortening the reservation to close", async () => {
+    const result = await availabilityService.checkAvailability({
+      reservation_date: futureDate(),
+      reservation_time: "23:00",
+      guest_count: 2,
+      seating_preference: "indoor",
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.matched_table_id).toBe(indoorTwoTop.id);
+  });
+
+  it("rejects starts that are later than the final 11 PM seating window", async () => {
+    const result = await availabilityService.checkAvailability({
+      reservation_date: futureDate(),
+      reservation_time: "23:30",
+      guest_count: 2,
+      seating_preference: "indoor",
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.explanation).toContain("closing time");
+  });
 });

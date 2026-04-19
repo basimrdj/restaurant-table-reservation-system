@@ -3,7 +3,7 @@
 const defaultOperatingHours = Array.from({ length: 7 }, (_, dayOfWeek) => ({
   day_of_week: dayOfWeek,
   open_time: "13:00:00",
-  close_time: "23:00:00",
+  close_time: "24:00:00",
   is_closed: false,
   created_at: new Date(),
   updated_at: new Date(),

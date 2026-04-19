@@ -20,11 +20,18 @@ const parseTimeParts = (value) => {
     Number.isNaN(parsed.minutes) ||
     Number.isNaN(parsed.seconds) ||
     parsed.hours < 0 ||
-    parsed.hours > 23 ||
+    parsed.hours > 24 ||
     parsed.minutes < 0 ||
     parsed.minutes > 59 ||
     parsed.seconds < 0 ||
     parsed.seconds > 59
+  ) {
+    throw new AppError(400, "VALIDATION_ERROR", "Time must be within a day.");
+  }
+
+  if (
+    parsed.hours === 24 &&
+    (parsed.minutes !== 0 || parsed.seconds !== 0)
   ) {
     throw new AppError(400, "VALIDATION_ERROR", "Time must be within a day.");
   }
@@ -52,6 +59,10 @@ const toMinutes = (time) => {
 };
 
 const minutesToTime = (minutes) => {
+  if (minutes === 24 * 60) {
+    return "24:00:00";
+  }
+
   const normalizedMinutes = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
   const hours = Math.floor(normalizedMinutes / 60)
     .toString()
@@ -61,7 +72,8 @@ const minutesToTime = (minutes) => {
 };
 
 const addMinutes = (time, minutes) => {
-  return minutesToTime(toMinutes(time) + minutes);
+  const totalMinutes = toMinutes(time) + minutes;
+  return minutesToTime(totalMinutes);
 };
 
 const isWithinRange = (targetTime, startTime, endTime) => {

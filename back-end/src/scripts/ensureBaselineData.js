@@ -4,7 +4,7 @@ const db = require("../db/models");
 const logger = require("../utils/logger");
 
 const DEFAULT_OPERATING_HOURS = Array.from({ length: 7 }, (_, dayOfWeek) => ({
-  closeTime: "23:00:00",
+  closeTime: "24:00:00",
   dayOfWeek,
   isClosed: false,
   openTime: "13:00:00",

@@ -31,6 +31,9 @@ const restaurantSettings = {
   defaultReservationDurationMinutes: Number(
     process.env.DEFAULT_RESERVATION_DURATION_MINUTES || 120
   ),
+  finalReservationDurationMinutes: Number(
+    process.env.FINAL_RESERVATION_DURATION_MINUTES || 60
+  ),
   alternativeSlotStepMinutes: Number(
     process.env.ALTERNATIVE_SLOT_STEP_MINUTES || 30
   ),
