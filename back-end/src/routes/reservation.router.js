@@ -11,6 +11,11 @@ router
   .all(httpMethodError);
 
 router
+  .route("/events")
+  .get(reservationController.streamHandler)
+  .all(httpMethodError);
+
+router
   .route("/:reservationId")
   .patch(tryCatchHandler(reservationController.updateHandler))
   .all(httpMethodError);

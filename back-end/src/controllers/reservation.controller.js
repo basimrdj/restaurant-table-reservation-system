@@ -1,4 +1,5 @@
 const reservationService = require("../services/reservationService");
+const reservationFeedService = require("../services/reservationFeedService");
 
 const listHandler = async (req, res) => {
   const reservations = await reservationService.listReservations({
@@ -57,10 +58,15 @@ const statusHandler = async (req, res) => {
   });
 };
 
+const streamHandler = (req, res) => {
+  reservationFeedService.openReservationFeed(req, res);
+};
+
 module.exports = {
   cancelHandler,
   createHandler,
   listHandler,
   statusHandler,
+  streamHandler,
   updateHandler,
 };
